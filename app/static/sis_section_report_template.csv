@@ -1,0 +1,4 @@
+course_id,section_id,status,start_date,end_date
+DEMO-42,DEMO-201-Re-Assessment,active,2026-11-02T00:00:00+11:00,2026-12-27T00:00:00+11:00
+DEMO-43,DEMO-211-Re-Assessment,active,2026-12-21T00:00:00+11:00,2030-12-30T00:00:00+11:00
+DEMO-42,DEMO-202-Regular,active,2026-11-02T00:00:00+11:00,2026-12-27T00:00:00+11:00

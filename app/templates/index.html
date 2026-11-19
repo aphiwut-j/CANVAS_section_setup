@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Canvas Section Planner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Canvas Section Planner home">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <span>Canvas Section Planner</span>
+      </a>
+      <span id="connectionBadge" class="status-badge">Checking connection…</span>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SECTION-SPECIFIC SCHEDULING</p>
+        <h1>Assign the right work<br>to the right sections.</h1>
+        <p class="hero-copy">Choose existing assignments and sections, set their dates, then review every change before Canvas is updated.</p>
+        <div class="safety-line"><span aria-hidden="true">✓</span> Preview, verified backup, and rollback are built in.</div>
+      </section>
+
+      {% if demo_mode %}
+      <aside class="demo-banner" role="status">
+        <strong>Demo mode</strong> — sample data only. Actions on this page do not contact Canvas.
+      </aside>
+      {% endif %}
+
+      <aside id="configurationBanner" class="configuration-banner" role="status" hidden>
+        <strong>Canvas connection is not configured</strong>
+        <p>Set <code>CANVAS_BASE_URL</code> and <code>CANVAS_API_TOKEN</code> in the application environment, then restart the app. The credential is never entered or displayed in this page.</p>
+      </aside>
+
+      <section class="workflow-card" aria-labelledby="course-heading">
+        <div class="step-heading">
+          <span class="step-number">1</span>
+          <div><h2 id="course-heading">Upload the allowed scope</h2><p>The file is the boundary. Canvas-wide course and section lists are never requested.</p></div>
+        </div>
+        <label class="field-label import-option" for="importMode">Import option
+        <select id="importMode">
+          <option value="standard">Section links or numeric Canvas IDs (existing workflow)</option>
+          <option value="sis_dates">SIS section report with start and end dates</option>
+        </select>
+        </label>
+        <div id="sisImportOptions" hidden>
+          <label class="check-card"><input id="reassessmentOnly" type="checkbox" checked><span><strong>Re-assessment sections only</strong><small>Match section IDs containing both “re” and “assessment”, ignoring case. Uncheck to include all sections.</small></span></label>
+          <p>Use course_id, section_id, start_date, and end_date. SIS IDs are resolved to Canvas IDs. Dates must include a timezone. Canvas converts midnight Due and Available until to 11:59:59 pm on the same date in the API user's timezone. The preview shows the final times.</p>
+          <a href="/static/sis_section_report_template.csv" download>Download SIS report example (demo IDs; replace with your own)</a>
+        </div>
+        <div class="scope-grid">
+          <label class="upload-box" for="scopeFile">
+            <span class="upload-icon" aria-hidden="true">↑</span>
+            <span><strong>Choose CSV or Excel</strong><small id="scopeFormatHint">Use <code>section_url</code> or <code>course_id,section_id</code> · Maximum 500 rows</small></span>
+            <input id="scopeFile" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          </label>
+          <div id="standardScopeHelp" class="scope-help">
+            <strong>Recommended format</strong>
+            <pre>section_url
+https://canvas.example.edu/courses/42/sections/201
+https://canvas.example.edu/courses/42/sections/202</pre>
+            <a href="/static/section_scope_template.csv" download>Download CSV template</a>
+          </div>
+          <div id="sisScopeHelp" class="scope-help" hidden>
+            <strong>SIS report columns</strong>
+            <pre>course_id,section_id,start_date,end_date</pre>
+            <p>Keep the report's SIS IDs and timezone-aware dates. Extra columns are allowed.</p>
+          </div>
+        </div>
+        <div class="upload-actions"><p>The file is validated in memory and is not retained.</p><button id="uploadScopeButton" class="button primary" type="button">Validate allowed IDs</button></div>
+        <div id="scopeSummary" class="summary-strip" hidden></div>
+        <div id="scopedCourseControl" class="course-control" hidden>
+          <label>Imported courses</label>
+          <div class="control-row">
+            <div id="importedCourseList" class="imported-course-list"></div>
+            <button id="loadCourseButton" class="button secondary" type="button">Load all provided courses</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="scheduleCard" class="workflow-card is-disabled" aria-labelledby="schedule-heading">
+        <div class="step-heading">
+          <span class="step-number">2</span>
+          <div><h2 id="schedule-heading">Bulk assign sections</h2><p>Select sections and assignments across the provided courses, then apply shared or assignment-specific dates.</p></div>
+        </div>
+
+        <div id="workspaceSummary" class="summary-strip" hidden></div>
+        <div class="bulk-controls">
+          <div class="section-picker" aria-labelledby="section-picker-heading">
+            <div class="picker-heading"><strong id="section-picker-heading">Sections</strong><span id="sectionSelectionCount">0 sections selected</span></div>
+            <div id="sectionOptions" class="section-options"><p>Load a course first.</p></div>
+            <div class="picker-actions"><button id="selectAllSections" class="text-button" type="button">Select all</button><button id="clearSections" class="text-button" type="button">Clear selection</button></div>
+          </div>
+          <fieldset class="date-mode">
+            <legend>Date schedule</legend>
+            <label class="mode-option"><input id="dateModeSame" type="radio" name="dateMode" value="same" checked><span><strong>Same dates</strong><small>Use one schedule for every selected section and assignment.</small></span></label>
+            <label class="mode-option"><input id="dateModeDifferent" type="radio" name="dateMode" value="different"><span><strong>Different by assignment</strong><small>Each assignment gets its own dates across all selected sections.</small></span></label>
+            <label id="csvDateModeOption" class="mode-option" hidden><input id="dateModeCsv" type="radio" name="dateMode" value="csv" disabled><span><strong>Dates from uploaded report</strong><small>Use each section's start and end dates without entering them again.</small></span></label>
+          </fieldset>
+        </div>
+
+        <div id="combinationCount" class="combination-count">Select sections and assignments to build the preview.</div>
+        <div id="csvDatesPanel" class="shared-date-panel" hidden>
+          <div><strong>Section dates from CSV/Excel</strong><p>Start date → Available from. End date → Available until. Canvas converts midnight Due and Available until to 11:59:59 pm on the same local date. Review the final times in the preview.</p></div>
+          <label class="field-label" for="csvDuePolicy">Assignment due dates
+          <select id="csvDuePolicy">
+            <option value="day_before_end" selected>Due one day before each section's end date</option>
+            <option value="preserve">Keep existing due dates; flag dates outside the section window</option>
+            <option value="end">Use each section's end date as its due date</option>
+            <option value="none">No due date for selected section overrides</option>
+          </select>
+          </label>
+        </div>
+
+        <div id="sharedDatesPanel" class="shared-date-panel">
+          <div><strong>Shared schedule</strong><p>These dates will be copied to every selected section and assignment combination.</p></div>
+          <div class="date-grid">
+            <label for="sharedUnlockAt"><span>Available from</span><input id="sharedUnlockAt" type="datetime-local"></label>
+            <label for="sharedDueAt"><span>Due</span><input id="sharedDueAt" type="datetime-local"></label>
+            <label for="sharedLockAt"><span>Closes</span><input id="sharedLockAt" type="datetime-local"></label>
+          </div>
+        </div>
+
+        <div class="assignment-toolbar">
+          <strong id="assignmentSelectionCount">0 assignments selected</strong>
+          <div><button id="selectAllAssignments" class="text-button" type="button">Select all</button><button id="clearAssignments" class="text-button" type="button">Clear selection</button></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th class="selection-column"><span class="sr-only">Select</span></th><th>Assignment</th><th class="individual-date-column" hidden>Available from</th><th class="individual-date-column" hidden>Due</th><th class="individual-date-column" hidden>Closes</th></tr></thead>
+            <tbody id="assignmentRows"></tbody>
+          </table>
+        </div>
+
+        <label class="check-card">
+          <input id="restrictAssignments" type="checkbox" checked>
+          <span><strong>Remove the “Everyone” audience</strong><small>Only students covered by assignment overrides will see these assignments. Existing overrides for other recipients are preserved.</small></span>
+        </label>
+
+        <div class="card-actions">
+          <p>No Canvas changes happen until the next screen is reviewed and confirmed.</p>
+          <button id="previewButton" class="button primary" type="button">Preview changes <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+
+      <section id="previewCard" class="workflow-card preview-card" aria-labelledby="preview-heading" hidden>
+        <div class="step-heading">
+          <span class="step-number">3</span>
+          <div><h2 id="preview-heading">Review and confirm</h2><p>This preview is based on a fresh read from Canvas.</p></div>
+        </div>
+        <div id="previewWarnings"></div>
+        <p id="previewTimezone"></p>
+        <div id="previewSummary" class="preview-summary"></div>
+        <div class="table-wrap"><table><thead><tr><th>Course</th><th>Assignment</th><th>Section</th><th>Action</th><th>Before</th><th>After</th></tr></thead><tbody id="previewRows"></tbody></table></div>
+        <label class="confirmation"><input id="confirmPreview" type="checkbox"><span>I reviewed the assignments, sections, dates, and visibility change.</span></label>
+        <div class="card-actions">
+          <button id="backButton" class="button secondary" type="button">Back to edit</button>
+          <button id="applyButton" class="button danger" type="button" disabled>Create backup & apply</button>
+        </div>
+      </section>
+
+      <section id="resultCard" class="workflow-card result-card" aria-live="polite" hidden>
+        <div id="resultIcon" class="result-icon">✓</div>
+        <div><p class="eyebrow">OPERATION RESULT</p><h2 id="resultTitle">Changes verified</h2><p id="resultMessage"></p><dl id="resultDetails"></dl></div>
+        <div class="operation-actions">
+          <button id="recheckOperationButton" class="button secondary" type="button">Recheck Canvas (no changes)</button>
+          <button id="rollbackButton" class="button secondary" type="button">Roll back this operation</button>
+        </div>
+        <div id="recheckDifferences" class="table-wrap" hidden>
+          <p id="recheckDifferenceSummary"></p>
+          <table><thead><tr><th>Course</th><th>Assignment</th><th>Section</th><th>Expected</th><th>Current Canvas</th></tr></thead><tbody id="recheckDifferenceRows"></tbody></table>
+        </div>
+      </section>
+      <section class="workflow-card" aria-labelledby="saved-operation-heading">
+        <h2 id="saved-operation-heading">Review a saved operation</h2>
+        <p>Load an operation by its full ID to inspect its status, recheck Canvas without changing it, or access rollback.</p>
+        <div class="control-row">
+          <label class="field-label" for="savedOperationId">Operation ID<input id="savedOperationId" type="text" maxlength="32" autocomplete="off" placeholder="32-character operation ID"></label>
+          <button id="loadOperationButton" class="button secondary" type="button">Load operation</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="alert" hidden></div>
+  </body>
+</html>
